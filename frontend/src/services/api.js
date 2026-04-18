@@ -130,6 +130,11 @@ export const activityAPI = {
   },
 };
 
+// ── AI ────────────────────────────────────────────────────────────
+export const aiAPI = {
+  generateBillingSummary: (body) => request('/ai/billing-summary', { method: 'POST', body: JSON.stringify(body) }),
+};
+
 // ── UTILS ─────────────────────────────────────────────────────────
 export const downloadBlob = (blob, filename) => {
   const url = window.URL.createObjectURL(blob);

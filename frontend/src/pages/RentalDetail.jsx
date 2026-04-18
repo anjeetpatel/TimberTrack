@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { rentalAPI, paymentAPI, returnAPI, whatsappAPI } from '../services/api';
+import { rentalAPI, paymentAPI, returnAPI, whatsappAPI, aiAPI } from '../services/api';
 import LoadingSpinner from '../components/LoadingSpinner';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { useToast } from '../components/Toast';
@@ -19,6 +19,13 @@ export default function RentalDetail() {
   const [paymentForm, setPaymentForm] = useState({ amount: '', paymentMethod: 'CASH' });
   const [paying, setPaying] = useState(false);
   const [showPayConfirm, setShowPayConfirm] = useState(false);
+
+  // AI Summary State
+  const [showAIModal, setShowAIModal] = useState(false);
+  const [aiSettings, setAISettings] = useState({ tone: 'FRIENDLY', language: 'English' });
+  const [generatingAI, setGeneratingAI] = useState(false);
+  const [aiSummary, setAiSummary] = useState('');
+  const [copyDone, setCopyDone] = useState(false);
 
   useEffect(() => { loadAll(); }, [id]);
 
@@ -71,6 +78,33 @@ export default function RentalDetail() {
     }
   };
 
+  const handleGenerateAISummary = async () => {
+    setGeneratingAI(true);
+    try {
+      const res = await aiAPI.generateBillingSummary({
+        rentalId: id,
+        tone: aiSettings.tone,
+        language: aiSettings.language,
+      });
+      setAiSummary(res.data);
+    } catch (err) {
+      addToast(err.message, 'error');
+    } finally {
+      setGeneratingAI(false);
+    }
+  };
+
+  const handleShareAI = () => {
+    const text = encodeURIComponent(aiSummary);
+    window.open(`https://wa.me/?text=${text}`, '_blank');
+  };
+
+  const handleCopyAI = () => {
+    navigator.clipboard.writeText(aiSummary);
+    setCopyDone(true);
+    setTimeout(() => setCopyDone(false), 2000);
+  };
+
   if (loading) return <LoadingSpinner size="page" />;
   if (!rental) return <div className="page-body"><p>Rental not found.</p></div>;
 
@@ -103,6 +137,12 @@ export default function RentalDetail() {
             <button className="btn btn-primary btn-sm" onClick={() => navigate(`/rentals/${id}/return`)}>
               <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>assignment_returned</span>
               Return Items
+            </button>
+          )}
+          {isOwner() && (
+            <button className="btn btn-secondary btn-sm" onClick={() => { setShowAIModal(true); setAiSummary(''); }} style={{ background: 'var(--primary-container)', color: 'var(--on-primary-container)', border: 'none' }}>
+              <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>smart_toy</span>
+              Generate AI Bill
             </button>
           )}
         </div>
@@ -288,6 +328,83 @@ export default function RentalDetail() {
           onConfirm={handlePayment}
           onCancel={() => setShowPayConfirm(false)}
         />
+      )}
+
+      {/* AI Summary Modal */}
+      {showAIModal && (
+        <div className="modal-overlay" onClick={() => setShowAIModal(false)}>
+          <div className="modal" style={{ maxWidth: '600px' }} onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span className="material-symbols-outlined" style={{ color: 'var(--primary)' }}>smart_toy</span>
+                AI Billing Summary
+              </h3>
+              <button className="modal-close" onClick={() => setShowAIModal(false)}>
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+            <p style={{ color: 'var(--on-surface-variant)', fontSize: '0.85rem', marginBottom: '20px' }}>
+              Generate a perfectly formatted WhatsApp bill using safe, pre-calculated ledger numbers.
+            </p>
+
+            <div style={{ display: 'flex', gap: '12px', marginBottom: '16px' }}>
+              <div className="form-group" style={{ flex: 1, marginBottom: 0 }}>
+                <label>Language</label>
+                <select className="form-select" value={aiSettings.language} onChange={e => setAISettings({...aiSettings, language: e.target.value})}>
+                  <option value="English">English</option>
+                  <option value="Hindi">Hindi (हिंदी)</option>
+                  <option value="Marathi">Marathi (मराठी)</option>
+                  <option value="Gujarati">Gujarati (ગુજરાતી)</option>
+                  <option value="Spanish">Spanish</option>
+                </select>
+              </div>
+              <div className="form-group" style={{ flex: 1, marginBottom: 0 }}>
+                <label>Tone</label>
+                <select className="form-select" value={aiSettings.tone} onChange={e => setAISettings({...aiSettings, tone: e.target.value})}>
+                  <option value="FRIENDLY">Polite & Friendly</option>
+                  <option value="STRICT">Strict Reminder</option>
+                </select>
+              </div>
+            </div>
+
+            {!aiSummary ? (
+              <div style={{ padding: '40px', textAlign: 'center', background: 'var(--surface-container-low)', borderRadius: '8px', border: '1px dashed var(--outline-variant)' }}>
+                <button className="btn btn-primary btn-lg" onClick={handleGenerateAISummary} disabled={generatingAI}>
+                  {generatingAI ? <><div className="spinner spinner-sm" /> Generating with Gemini...</> : '✨ Generate Smart Bill'}
+                </button>
+              </div>
+            ) : (
+              <div style={{ marginTop: '16px' }}>
+                <div style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--primary)', marginBottom: '8px' }}>
+                  Generated WhatsApp Message
+                </div>
+                <textarea
+                  readOnly
+                  value={aiSummary}
+                  style={{
+                    width: '100%', height: '250px', padding: '12px',
+                    borderRadius: '8px', border: '1px solid var(--outline-variant)',
+                    background: 'var(--surface-container-lowest)', color: 'var(--on-surface)',
+                    fontFamily: 'monospace', fontSize: '0.9rem', resize: 'vertical'
+                  }}
+                />
+                <div style={{ display: 'flex', gap: '8px', marginTop: '16px' }}>
+                  <button className="btn btn-secondary" onClick={handleCopyAI} style={{ flex: 1 }}>
+                    <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>{copyDone ? 'check' : 'content_copy'}</span>
+                    {copyDone ? 'Copied' : 'Copy'}
+                  </button>
+                  <button className="btn btn-whatsapp" onClick={handleShareAI} style={{ flex: 2 }}>
+                    <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>send</span>
+                    Send via WhatsApp
+                  </button>
+                  <button className="btn btn-icon btn-secondary" onClick={() => setAiSummary('')} title="Reset">
+                    <span className="material-symbols-outlined">refresh</span>
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
       )}
     </div>
   );

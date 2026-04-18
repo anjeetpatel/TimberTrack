@@ -21,6 +21,7 @@ const exportRoutes = require('./routes/export');
 const organizationRoutes = require('./routes/organization');
 const subscriptionRoutes = require('./routes/subscription');
 const activityRoutes = require('./routes/activity');
+const aiRoutes = require('./routes/ai');
 
 const app = express();
 
@@ -51,6 +52,7 @@ app.use('/api/export', exportRoutes);
 app.use('/api/organization', organizationRoutes);
 app.use('/api/subscription', subscriptionRoutes);
 app.use('/api/activity', activityRoutes);
+app.use('/api/ai', aiRoutes);
 
 // ── Health check ─────────────────────────────────────────────────
 app.get('/api/health', (req, res) => {
