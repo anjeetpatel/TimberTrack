@@ -1,10 +1,10 @@
 <div align="center">
 
-# 🌲 TimberTrack
+# 🌲 TimberTrack SaaS
 
-### Smart Rental & Ledger Management System
+### Smart Multi-Tenant Rental & Ledger Management System
 
-**A production-ready full-stack application for timber and construction equipment rental businesses**
+**A production-ready full-stack SaaS platform for timber and construction equipment rental businesses**
 
 [![Node.js](https://img.shields.io/badge/Node.js-18+-339933?style=flat-square&logo=node.js&logoColor=white)](https://nodejs.org)
 [![Express](https://img.shields.io/badge/Express-4.x-000000?style=flat-square&logo=express&logoColor=white)](https://expressjs.com)
@@ -19,13 +19,13 @@
 ## 📋 Table of Contents
 
 - [Overview](#-overview)
-- [Features](#-features)
+- [Key Features](#-key-features)
 - [Tech Stack](#-tech-stack)
 - [Project Structure](#-project-structure)
 - [Getting Started](#-getting-started)
 - [Default Credentials](#-default-credentials)
-- [API Reference](#-api-reference)
-- [Data Models](#-data-models)
+- [Multi-Tenant Architecture](#-multi-tenant-architecture)
+- [Role-Based Access Control (RBAC)](#-role-based-access-control-rbac)
 - [Business Logic](#-business-logic)
 - [Environment Variables](#-environment-variables)
 - [Screenshots](#-screenshots)
@@ -34,50 +34,42 @@
 
 ## 🔍 Overview
 
-TimberTrack is a **daily-use rental management tool** built for small business owners who rent timber, scaffolding, shuttering, props, and construction equipment. It handles the full rental lifecycle — from creating rentals to processing partial returns, collecting payments, and sending WhatsApp reminders — all in a clean, fast, and reliable interface.
+TimberTrack is a **multi-user SaaS rental management platform** built for small to mid-sized businesses renting timber, scaffolding, shuttering, props, and construction equipment. It handles the full rental lifecycle — from creating rentals and tracking inventory to processing partial returns and capturing payments.
 
-This project was designed to behave like a **real rental business management platform**, not just a CRUD application, with accurate billing, data integrity guarantees, and real-world edge case handling.
+It is designed as a secure, strict-isolation SaaS platform where multiple distinct businesses (Organizations) can operate simultaneously on the same backend infrastructure, strictly isolated from each other.
 
 ---
 
-## ✨ Features
+## ✨ Key Features
 
-### 🏗️ Core Business
+### 🏢 Multi-Tenancy & SaaS
 | Feature | Description |
 |---------|-------------|
-| **Inventory Management** | Track total vs. available stock; prevent negative inventory |
-| **Customer Management** | Add and search customers with pagination |
-| **Rental Creation** | Atomic write — simultaneously creates rental and reserves stock |
-| **Partial Returns** | Return some or all items incrementally across multiple sessions |
-| **Accurate Billing** | `lastCalculatedDate` per item prevents double-billing on partial returns |
-| **Damage & Lost Charges** | Capture damage fees and lost-item replacement costs |
-| **Payment Recording** | Cash, UPI, Card, Bank Transfer with overflow protection |
-| **Automatic Status Tracking** | Rental auto-completes when all items are returned |
+| **Strict Data Isolation** | Every entity maps to an `organizationId`. Multi-tenant requests are guaranteed secure through strict context scoping. |
+| **Invite System** | Owners can generate limits-based invite codes for Workers to join their organization. |
+| **Subscription Limits** | Free tiers vs. Paid tiers. Enforces monthly limits on rentals and customer creation via `checkSubscription` middleware. Auto monthly resets. |
+| **Ownership Transfer** | Secure capability to transfer ownership to another member in an organization via transactions. |
 
-### 📊 Dashboard & Analytics
-- Live stats: Active Rentals, Overdue Rentals, Total Revenue, Pending Payments, Items Out
-- Recent rentals table with overdue indicators
-- CSV export for rental and payment history
+### 🏗️ Core Business Logic
+| Feature | Description |
+|---------|-------------|
+| **Atomic Rental & Return Flow** | Creates rental + reserves stock synchronously. Partial/Full Returns restore stock synchronously (Wrapped securely in MongoDB sessions). |
+| **Sophisticated Billing Engine** | `lastCalculatedDate` prevents double-billing for incremental/partial returns of items across different days. |
+| **Payment Overflow Guard** | Robust backend checks to prevent logging payments that exceed the total outstanding balance. |
+| **Soft & Hard Delete Guards** | Prevents deletion of items or customers currently involved in an active rental. Implements `isDeleted` flags. |
 
-### 📱 Communication
-- **WhatsApp Integration** — one-click `wa.me` links with pre-filled messages:
-  - Rental Created confirmation
-  - Return Summary with balance breakdown
-  - Payment Reminder for overdue accounts
+### 🔒 Security, Trust & Ops
+- **RBAC:** Owner vs. Worker access controls (workers can't delete data, approve payments, view revenue, or transfer ownership).
+- **JWT Rotation:** 7-day refresh tokens mapped by the backend with rotation and auto-expiration on sign-in.
+- **Activity Log Audit Trail:** Immutable system logs every system action (who, what, when, against which entity). 
+- **Production Hardening:** Express strict rate-limiting, Helmet CSP injection, Mongo express-sanitizer for NoSql injections.
+- **Winston Centralized Context Logging:** High-accuracy logs.
+- **Automated DB Backups:** Included Unix `bash` shell scripts to perform daily automated MongoDB dumps with a rolling 30-day retention curve.
 
-### 🔒 Security & Auth
-- Phone number + 4-digit PIN login
-- JWT-based session (7-day token)
-- All API routes protected by auth middleware
-- Audit trail (`createdBy`) on rentals, returns, and payments
-
-### 🎨 UI / UX
-- **Alexandria design system** — Noto Serif headlines + Inter body + Public Sans labels
-- Red pulsing badges for overdue rentals
-- Confirmation dialogs before returns and payments
-- Toast notifications for all actions
-- Loading spinners on buttons and pages
-- Lazy-loaded pages via `React.lazy`
+### 📱 Communications & Insights
+- **WhatsApp Integration:** Generates WhatsApp `wa.me` strings mapping to overdue accounts, new rentals, and partial returns natively.
+- **Live Stats Dashboard:** Organization-scoped aggregated data for revenue, delayed payments, and total active elements out in the wild.
+- **Data Export:** Generate `.CSV` exports of financials safely bounded by date.
 
 ---
 
@@ -87,17 +79,17 @@ This project was designed to behave like a **real rental business management pla
 - **Runtime:** Node.js 18+
 - **Framework:** Express 4.x
 - **Database:** MongoDB + Mongoose 8.x
-- **Auth:** JSON Web Tokens (`jsonwebtoken`) + `bcryptjs`
-- **Logging:** Morgan
-- **CORS:** `cors` middleware
+- **Auth:** JSON Web Tokens (`jsonwebtoken`) + Refresh Tokens
+- **Security:** Helmet, express-rate-limit, express-mongo-sanitize
+- **Logging:** Winston + Morgan
+- **CORS & Config:** cors, dotenv
 
 ### Frontend
 - **Bundler:** Vite 8.x
-- **UI Library:** React 19
+- **UI Architecture:** React 19 + Context API
 - **Routing:** React Router DOM v7
-- **Styling:** Vanilla CSS (custom design system, no framework)
-- **Fonts:** Google Fonts (Noto Serif, Inter, Public Sans)
-- **Icons:** Google Material Symbols
+- **Styling:** Custom Vanilla CSS Token-based Design System
+- **Fonts & Symbols:** Google Fonts (Inter, Noto Serif), Google Material Symbols
 
 ---
 
@@ -107,66 +99,41 @@ This project was designed to behave like a **real rental business management pla
 TimberTrack/
 │
 ├── backend/
-│   ├── config/
-│   │   └── db.js                    # MongoDB connection
-│   ├── controllers/
-│   │   ├── authController.js        # Register & Login
-│   │   ├── inventoryController.js   # Inventory CRUD
-│   │   ├── customerController.js    # Customer CRUD
-│   │   ├── rentalController.js      # Rental creation & listing
-│   │   ├── returnController.js      # Return processing (atomic)
-│   │   ├── paymentController.js     # Payment recording
-│   │   ├── dashboardController.js   # Aggregated stats
-│   │   ├── whatsappController.js    # Message link generation
-│   │   └── exportController.js      # CSV downloads
+│   ├── config/                  # DB and Winston logger Configurations
+│   ├── controllers/             # Core logic endpoints (Multi-tenant scoped)
 │   ├── middleware/
-│   │   ├── auth.js                  # JWT verification
-│   │   └── errorHandler.js          # Global error handler
+│   │   ├── auth.js              # Token & Session context validation
+│   │   ├── requireRole.js       # RBAC guards (OWNER vs WORKER)
+│   │   ├── checkSubscription.js # Usage & threshold limiting
+│   │   ├── rateLimiter.js       # Endpoint throttling 
+│   │   └── errorHandler.js      # Formatted Error boundary
 │   ├── models/
-│   │   ├── User.js                  # Phone + PIN auth
-│   │   ├── Inventory.js             # Stock with availableQuantity
-│   │   ├── Customer.js              # Customer records
-│   │   ├── Rental.js                # Core rental with per-item tracking
-│   │   ├── ReturnTransaction.js     # Each return event
-│   │   └── Payment.js               # Each payment event
-│   ├── routes/                      # One file per resource
-│   ├── utils/
-│   │   ├── dateUtils.js             # daysBetween(), formatDate()
-│   │   ├── costCalculator.js        # Billing engine
-│   │   └── whatsappMessage.js       # Message templates + wa.me generator
-│   ├── seed.js                      # Dev seed: user + inventory + customers
-│   ├── server.js                    # Express app entry point
-│   └── package.json
+│   │   ├── Organization.js      # Tenancy, Subscription limits, Invite Codes
+│   │   ├── ActivityLog.js       # Immutable Audit Trails
+│   │   ├── User.js              # Secure Role Accounts
+│   │   ├── Rental, ReturnTransaction, Payment, Customer, Inventory
+│   ├── routes/                  # Express REST routes
+│   ├── scripts/
+│   │   └── backup.sh            # Cron-runnable mongodump backup policy
+│   ├── utils/                   # Cost Calculators, WhatsApp Templates
+│   ├── migrate.js               # Dev tool to port single-user data to multi-tenant 
+│   ├── seed.js                  # Fresh Org / Sample Data creation
+│   └── server.js                # Bootstrap Express instance
 │
 ├── frontend/
 │   ├── src/
 │   │   ├── services/
-│   │   │   └── api.js               # Centralized fetch wrapper (all endpoints)
+│   │   │   └── api.js           # Generic Fetch wrapper mapping endpoints & errors
 │   │   ├── context/
-│   │   │   └── AuthContext.jsx      # JWT auth state (login/logout/register)
-│   │   ├── components/
-│   │   │   ├── Sidebar.jsx          # Navigation with overdue badge
-│   │   │   ├── Toast.jsx            # Toast notification system
-│   │   │   ├── ConfirmDialog.jsx    # Confirmation modal
-│   │   │   ├── LoadingSpinner.jsx   # Spinner (page and button)
-│   │   │   └── Pagination.jsx       # Smart pagination component
-│   │   ├── pages/
-│   │   │   ├── Login.jsx            # Phone + PIN login/register
-│   │   │   ├── Dashboard.jsx        # Stats + recent rentals
-│   │   │   ├── Inventory.jsx        # Inventory table + Add modal
-│   │   │   ├── Customers.jsx        # Customer list + Add modal
-│   │   │   ├── Rentals.jsx          # Active/Completed with filters
-│   │   │   ├── NewRental.jsx        # Create rental flow
-│   │   │   ├── RentalDetail.jsx     # Full detail + payments + WhatsApp
-│   │   │   └── ReturnItems.jsx      # Partial return interface
-│   │   ├── App.jsx                  # Routing + lazy loading + layout
-│   │   ├── main.jsx                 # React entry point
-│   │   └── index.css                # Full design system CSS
+│   │   │   └── AuthContext.jsx  # Token + User + Org state distribution
+│   │   ├── components/          # Reusable dumb views (Nav, Inputs, UI Lists)
+│   │   ├── pages/               # Feature-Level Routable Views (Lazy Loaded)
+│   │   │   ├── Dashboard, Login, Rentals, NewRental, Settings, Inventory, etc.
+│   │   ├── App.jsx              # Protected route architecture
+│   │   ├── main.jsx             # React DOM root
+│   │   └── index.css            # System tokens
 │   ├── index.html
 │   └── package.json
-│
-├── .gitignore
-└── README.md
 ```
 
 ---
@@ -198,18 +165,20 @@ Create a `.env` file in `backend/`:
 ```env
 PORT=5000
 MONGODB_URI=mongodb://localhost:27017/timbertrack
-JWT_SECRET=your_secret_key_here
+JWT_SECRET=super_strong_secret_key_v2
+JWT_REFRESH_SECRET=super_strong_refresh_key_v2
 OVERDUE_THRESHOLD_DAYS=30
 NODE_ENV=development
 ```
 
-Seed the database with sample data:
+**Seed the database with sample data:**
 
 ```bash
 node seed.js
 ```
+*(This creates an Organization, Owner Account, Customers, and drops dummy inventory.)*
 
-Start the backend server:
+**Start the backend server:**
 
 ```bash
 npm run dev
@@ -230,7 +199,7 @@ Create a `.env` file in `frontend/`:
 VITE_API_URL=http://localhost:5000/api
 ```
 
-Start the frontend:
+**Start the frontend:**
 
 ```bash
 npm run dev
@@ -242,236 +211,86 @@ npm run dev
 
 ## 🔑 Default Credentials
 
-After running `node seed.js`, use these to log in:
+If you ran `node seed.js`, TimberTrack initializes an Owner and gives an Invite Code.
+Check the terminal output of `seed.js` for the **invite code**.
 
 | Field | Value |
 |-------|-------|
 | **Phone** | `9999999999` |
 | **PIN** | `1234` |
-
-The seed also creates **10 inventory items** and **5 sample customers**.
-
----
-
-## 📡 API Reference
-
-All routes (except `/api/auth/*`) require a Bearer token header:
-```
-Authorization: Bearer <token>
-```
-
-### Auth
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `POST` | `/api/auth/register` | Register with phone + name + PIN |
-| `POST` | `/api/auth/login` | Login → returns JWT token |
-
-### Inventory
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/api/inventory?search=` | List all items (with optional search) |
-| `POST` | `/api/inventory` | Add new inventory item |
-| `PUT` | `/api/inventory/:id` | Update item (quantity-safe) |
-
-### Customers
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/api/customers?search=&page=&limit=` | Paginated list |
-| `POST` | `/api/customers` | Add new customer |
-
-### Rentals
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/api/rentals?status=&filter=&search=&page=` | List (filterable: overdue, pending) |
-| `GET` | `/api/rentals/:id` | Detail with overdue flag + running cost |
-| `POST` | `/api/rentals` | Create rental (**atomic**) |
-
-### Returns
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `POST` | `/api/returns` | Process return (**atomic**) |
-| `GET` | `/api/returns?rentalId=` | Return history for a rental |
-
-### Payments
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `POST` | `/api/payments` | Record payment (overflow-safe) |
-| `GET` | `/api/payments?rentalId=` | Payment history for a rental |
-
-### Dashboard
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/api/dashboard/stats` | Aggregated business metrics |
-
-### WhatsApp
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/api/whatsapp/rental/:id` | Rental confirmation message + link |
-| `GET` | `/api/whatsapp/return/:id` | Return summary message + link |
-| `GET` | `/api/whatsapp/reminder/:id` | Payment reminder message + link |
-
-### Export
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/api/export/rentals` | Download rental history as CSV |
-| `GET` | `/api/export/payments` | Download payment history as CSV |
+| **Role** | `OWNER` |
 
 ---
 
-## 🗄️ Data Models
+## 🏢 Multi-Tenant Architecture
 
-### Inventory
-```js
-{
-  name: String,               // "Wooden Balli (10ft)"
-  category: String,           // "Scaffolding"
-  pricePerDay: Number,        // ₹/day
-  totalQuantity: Number,
-  availableQuantity: Number,  // Tracked & guarded — never goes negative
-  itemValue: Number,          // Replacement cost (used for lost charges)
-}
-```
+All API calls from an authenticated client include a `req.user.organizationId` appended by the `auth` middleware. 
 
-### Rental
-```js
-{
-  customerId: ObjectId,
-  createdBy: ObjectId,        // Audit trail
-  items: [{
-    itemId: ObjectId,
-    itemName: String,         // Denormalized
-    issuedQty: Number,
-    returnedQty: Number,      // Updated per return
-    pricePerDay: Number,      // Snapshot at time of rental
-    lastCalculatedDate: Date, // Key: advances with each partial return
-  }],
-  startDate: Date,
-  status: 'ACTIVE' | 'COMPLETED',
-  totalAmount: Number,        // Grows as returns are processed
-  amountPaid: Number,
-  paymentStatus: 'UNPAID' | 'PARTIAL' | 'PAID',
-}
+In every controller operation, queries mandate the `organizationId`:
+```javascript
+const inventory = await Inventory.find({ 
+    organizationId: req.user.organizationId,
+    isDeleted: false 
+});
 ```
-
-### ReturnTransaction
-```js
-{
-  rentalId: ObjectId,
-  returnedItems: [{
-    itemId, quantityReturned, daysCharged, lineCost
-  }],
-  returnDate: Date,
-  totalCost: Number,
-  damageCharges: Number,
-  lostCharges: Number,        // lostQty × itemValue
-  finalAmount: Number,        // totalCost + damageCharges + lostCharges
-  createdBy: ObjectId,
-}
-```
-
-### Payment
-```js
-{
-  rentalId: ObjectId,
-  amount: Number,             // Validated: cannot exceed dueBalance
-  paymentDate: Date,
-  paymentMethod: 'CASH' | 'UPI' | 'CARD' | 'BANK_TRANSFER',
-  createdBy: ObjectId,
-}
-```
+This isolates companies entirely. There is no super-admin dashboard included; every access requires joining an organization.
 
 ---
 
-## ⚙️ Business Logic
+## 🛡️ Role-Based Access Control (RBAC)
 
-### Partial Return Billing (Most Critical)
+Two core roles define operations: `OWNER` and `WORKER`.
 
-Each rental item tracks a `lastCalculatedDate`. When items are returned:
-
-```
-daysCharged = daysBetween(item.lastCalculatedDate, returnDate)   // min 1 day
-lineCost    = quantityReturned × pricePerDay × daysCharged
-item.lastCalculatedDate = returnDate   // Advanced to prevent re-billing
-```
-
-This means if you return 5 items on Day 10 and the remaining 5 on Day 20, each batch is correctly charged only for its own period.
-
-### Atomic Operations
-
-Both **rental creation** and **return processing** are wrapped in MongoDB transactions:
-
-```
-BEGIN TRANSACTION
-  1. Validate stock / quantities
-  2. Update Inventory.availableQuantity
-  3. Create/update Rental
-  4. Create ReturnTransaction record
-COMMIT  (or ABORT on any failure)
-```
-
-No partial state is ever committed to the database.
-
-### Payment Safety
-
-```
-dueAmount = rental.totalAmount - rental.amountPaid
-
-if (payment.amount > dueAmount) → REJECT with clear error message
-```
-
-### Overdue Detection
-
-Computed on every API response (not stored):
-```
-currentDays = daysBetween(rental.startDate, today)
-isOverdue   = status === 'ACTIVE' && currentDays > OVERDUE_THRESHOLD_DAYS
-```
-
-Configurable via `OVERDUE_THRESHOLD_DAYS` env variable (default: 30 days).
+| Capability | OWNER | WORKER |
+|------------|-------|--------|
+| Create Rentals & Customers | ✅ | ✅ |
+| Manage Inventory Items | ✅ | ✅ |
+| Process Partial/Full Returns | ✅ | ✅ |
+| Change Organization Settings | ✅ | ❌ |
+| Invite Members to Organization| ✅ | ❌ |
+| Generate Subscription Reports | ✅ | ❌ |
+| Process Financial Payments | ✅ | ❌ |
+| See Dashboard Revenues | ✅ | ❌ |
+| Send Payment WhatsApp Reminders | ✅ | ❌ |
+| Hard/Soft Delete Entities | ✅ | ❌ |
 
 ---
 
-## 🔧 Environment Variables
+## ⚙️ Business Logic Highlights
+
+### Partial Return Billing 
+The system does not charge a flat rate. Each rental item tracks a `lastCalculatedDate`. When items are returned:
+```javascript
+daysCharged = Math.max(1, daysBetween(item.lastCalculatedDate, returnDate));
+lineCost = quantityReturned * pricePerDay * daysCharged;
+item.lastCalculatedDate = returnDate; // Advanced to prevent re-billing
+```
+If you return 5 items on Day 10 and 5 on Day 20, both batches calculate costs independently based on their exact return footprint.
+
+### MongoDB Sessions & Atomic Operations
+**Rental creation** and **return processing** run fully mapped inside `mongoose.startSession()` and `.withTransaction()`.
+If the process fails midway (e.g. creating the rental finishes but Inventory item decrement fails in DB), the system fully rolls back to the immediate previous state assuring accurate real-world item accounting.
+
+### Subscription Limits
+Companies on the `FREE` plan hit maximum caps `(100 customers max)` and `(50 rentals via rolling 30 day periods)`. Middleware automatically detects crossover dates, flushes usage back to zero on new billing periods, and returns graceful `403` HTTP errors stopping usage past limits until shifted to Paid tiers.
+
+---
+
+## 🔧 Environment Variables Reference
 
 ### Backend (`backend/.env`)
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `PORT` | `5000` | Server port |
-| `MONGODB_URI` | `mongodb://localhost:27017/timbertrack` | MongoDB connection string |
-| `JWT_SECRET` | — | Secret key for JWT signing (set a strong value in production) |
-| `OVERDUE_THRESHOLD_DAYS` | `30` | Days after which a rental is flagged as overdue |
-| `NODE_ENV` | `development` | Controls error verbosity |
-
-### Frontend (`frontend/.env`)
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `VITE_API_URL` | `http://localhost:5000/api` | Backend API base URL |
-
----
-
-## 🖼️ Screenshots
-
-| Screen | Description |
-|--------|-------------|
-| **Login** | Phone + PIN authentication |
-| **Dashboard** | Stats cards + overdue badges + recent rentals |
-| **Inventory** | Searchable table with In Stock / Low Stock / Out of Stock badges |
-| **Customers** | Paginated list with add-customer modal |
-| **Rentals** | Active/Completed tabs, overdue filter, pending payment filter |
-| **New Rental** | Customer picker + item catalog + quantity selector |
-| **Rental Detail** | Financial summary, WhatsApp button, return history, payment history |
-| **Return Items** | Per-item quantity inputs showing remaining stock, damage charges |
-
----
-
-## 📄 License
-
-This project is part of an academic comprehensive seminar submission.
+| `PORT` | `5000` | Server TCP Listening port |
+| `MONGODB_URI` | `mongodb://localhost:27017/timbertrack` | MongoDB connection URI |
+| `JWT_SECRET` | — | Session signing key |
+| `JWT_REFRESH_SECRET` | — | Long-lived JWT key to re-issue sessions without relogging |
+| `OVERDUE_THRESHOLD_DAYS` | `30` | Day marker to flag rentals as Overdue contextually |
+| `NODE_ENV` | `development` | Dictates strict error handling or verbose stacks |
 
 ---
 
 <div align="center">
-Made with ❤️ for small rental business owners
+Made with ❤️ for modern rental business organizations
 </div>

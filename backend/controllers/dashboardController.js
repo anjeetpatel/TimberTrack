@@ -5,15 +5,16 @@ const { daysBetween } = require('../utils/dateUtils');
 
 const OVERDUE_THRESHOLD = parseInt(process.env.OVERDUE_THRESHOLD_DAYS) || 30;
 
-// GET /api/dashboard/stats
+// GET /api/dashboard/stats — OWNER only
 exports.getStats = async (req, res, next) => {
   try {
+    const { organizationId } = req.user;
     const now = new Date();
 
-    // Active rentals
-    const activeRentals = await Rental.find({ status: 'ACTIVE' }).populate('customerId', 'name phone');
+    // Active rentals for this org
+    const activeRentals = await Rental.find({ organizationId, status: 'ACTIVE' })
+      .populate('customerId', 'name phone');
 
-    // Count overdue
     let overdueCount = 0;
     let totalItemsOut = 0;
     for (const rental of activeRentals) {
@@ -24,18 +25,31 @@ exports.getStats = async (req, res, next) => {
       }
     }
 
-    // Total revenue (all payments)
-    const revenueAgg = await Payment.aggregate([{ $group: { _id: null, total: { $sum: '$amount' } } }]);
-    const totalRevenue = revenueAgg.length > 0 ? revenueAgg[0].total : 0;
+    // Revenue: sum of all payments for this org
+    const revenueAgg = await Payment.aggregate([
+      { $match: { organizationId: require('mongoose').Types.ObjectId.createFromHexString(organizationId) } },
+      { $group: { _id: null, total: { $sum: '$amount' } } },
+    ]);
+    const totalRevenue = revenueAgg[0]?.total || 0;
 
-    // Pending payments
+    // Pending balance: total owed across unpaid/partial rentals for this org
     const pendingAgg = await Rental.aggregate([
-      { $match: { paymentStatus: { $in: ['UNPAID', 'PARTIAL'] } } },
+      { $match: { organizationId: require('mongoose').Types.ObjectId.createFromHexString(organizationId), paymentStatus: { $in: ['UNPAID', 'PARTIAL'] } } },
       { $group: { _id: null, total: { $sum: { $subtract: ['$totalAmount', '$amountPaid'] } } } },
     ]);
-    const pendingPayments = pendingAgg.length > 0 ? pendingAgg[0].total : 0;
+    const pendingPayments = pendingAgg[0]?.total || 0;
 
-    // Recent rentals (for dashboard table)
+    // Inventory summary for this org
+    const [totalInventory, lowStock] = await Promise.all([
+      Inventory.countDocuments({ organizationId, isDeleted: { $ne: true } }),
+      Inventory.countDocuments({
+        organizationId,
+        isDeleted: { $ne: true },
+        $expr: { $lt: ['$availableQuantity', { $multiply: ['$totalQuantity', 0.2] }] },
+      }),
+    ]);
+
+    // Recent rentals (latest 10, enriched)
     const recentRentals = activeRentals.slice(0, 10).map((r) => {
       const obj = r.toJSON();
       obj.currentDays = daysBetween(r.startDate, now);
@@ -43,12 +57,6 @@ exports.getStats = async (req, res, next) => {
       obj.totalItems = r.items.reduce((sum, item) => sum + item.issuedQty, 0);
       obj.itemsOut = r.items.reduce((sum, item) => sum + (item.issuedQty - item.returnedQty), 0);
       return obj;
-    });
-
-    // Inventory summary
-    const totalInventory = await Inventory.countDocuments();
-    const lowStock = await Inventory.countDocuments({
-      $expr: { $lt: ['$availableQuantity', { $multiply: ['$totalQuantity', 0.2] }] },
     });
 
     res.json({

@@ -15,21 +15,27 @@ const Rentals = lazy(() => import('./pages/Rentals'));
 const NewRental = lazy(() => import('./pages/NewRental'));
 const RentalDetail = lazy(() => import('./pages/RentalDetail'));
 const ReturnItems = lazy(() => import('./pages/ReturnItems'));
+const Settings = lazy(() => import('./pages/Settings'));
 
-function ProtectedRoute({ children }) {
-  const { isAuthenticated, loading } = useAuth();
+function ProtectedRoute({ children, ownerOnly = false }) {
+  const { isAuthenticated, loading, isOwner } = useAuth();
   if (loading) return <LoadingSpinner size="page" />;
   if (!isAuthenticated) return <Navigate to="/login" replace />;
+  if (ownerOnly && !isOwner()) return <Navigate to="/rentals" replace />;
   return children;
 }
 
 function AppLayout() {
+  const { isOwner } = useAuth();
   const [overdueCount, setOverdueCount] = useState(0);
 
   useEffect(() => {
-    dashboardAPI.getStats()
-      .then(res => setOverdueCount(res.data?.overdueRentals || 0))
-      .catch(() => {});
+    // Only fetch dashboard stats if OWNER (WORKER gets 403)
+    if (isOwner()) {
+      dashboardAPI.getStats()
+        .then(res => setOverdueCount(res.data?.overdueRentals || 0))
+        .catch(() => {});
+    }
   }, []);
 
   return (
@@ -38,14 +44,28 @@ function AppLayout() {
       <main className="main-content">
         <Suspense fallback={<LoadingSpinner size="page" />}>
           <Routes>
-            <Route path="/dashboard" element={<Dashboard />} />
+            {/* Owner-only routes */}
+            <Route path="/dashboard" element={
+              <ProtectedRoute ownerOnly>
+                <Dashboard />
+              </ProtectedRoute>
+            } />
+            <Route path="/settings" element={
+              <ProtectedRoute ownerOnly>
+                <Settings />
+              </ProtectedRoute>
+            } />
+
+            {/* Shared routes */}
             <Route path="/inventory" element={<Inventory />} />
             <Route path="/customers" element={<Customers />} />
             <Route path="/rentals" element={<Rentals />} />
             <Route path="/rentals/new" element={<NewRental />} />
             <Route path="/rentals/:id" element={<RentalDetail />} />
             <Route path="/rentals/:id/return" element={<ReturnItems />} />
-            <Route path="*" element={<Navigate to="/dashboard" replace />} />
+
+            {/* Default redirect */}
+            <Route path="*" element={<Navigate to={isOwner() ? '/dashboard' : '/rentals'} replace />} />
           </Routes>
         </Suspense>
       </main>

@@ -3,36 +3,73 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../components/Toast';
 
+// Register mode: 'create' (new org) or 'join' (invite code)
+const REGISTER_MODE = { CREATE: 'create', JOIN: 'join' };
+
 export default function Login() {
-  const [isRegister, setIsRegister] = useState(false);
+  const [mode, setMode] = useState('login'); // 'login' | 'register'
+  const [registerMode, setRegisterMode] = useState(REGISTER_MODE.CREATE);
   const [phone, setPhone] = useState('');
   const [name, setName] = useState('');
   const [pin, setPin] = useState('');
+  const [orgName, setOrgName] = useState('');
+  const [inviteCode, setInviteCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const { login, register } = useAuth();
+
+  const { login, register, isOwner } = useAuth();
   const { addToast } = useToast();
   const navigate = useNavigate();
+
+  const reset = (newMode) => {
+    setMode(newMode);
+    setError('');
+    setPhone(''); setName(''); setPin(''); setOrgName(''); setInviteCode('');
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+
     if (!phone || !pin) { setError('Phone and PIN are required.'); return; }
-    if (pin.length !== 4) { setError('PIN must be exactly 4 digits.'); return; }
-    if (isRegister && !name) { setError('Name is required.'); return; }
+    if (pin.length < 4) { setError('PIN must be at least 4 digits.'); return; }
+
+    if (mode === 'register') {
+      if (!name) { setError('Full name is required.'); return; }
+      if (registerMode === REGISTER_MODE.CREATE && !orgName) {
+        setError('Business name is required.'); return;
+      }
+      if (registerMode === REGISTER_MODE.JOIN && !inviteCode) {
+        setError('Invite code is required.'); return;
+      }
+    }
 
     setLoading(true);
     try {
-      if (isRegister) {
-        await register(phone, name, pin);
-        addToast('Registration successful! Welcome to TimberTrack.', 'success');
+      if (mode === 'register') {
+        const payload = {
+          name, phone, pin,
+          ...(registerMode === REGISTER_MODE.CREATE
+            ? { organizationName: orgName }
+            : { inviteCode: inviteCode.toUpperCase() }),
+        };
+        const res = await register(payload);
+        const role = res.data.user?.role;
+        addToast(
+          registerMode === REGISTER_MODE.CREATE
+            ? `Organization "${orgName}" created. Welcome, ${name}!`
+            : `Joined organization successfully. Welcome, ${name}!`,
+          'success'
+        );
+        navigate(role === 'OWNER' ? '/dashboard' : '/rentals');
       } else {
-        await login(phone, pin);
+        const res = await login(phone, pin);
+        const role = res.data.user?.role;
         addToast('Welcome back!', 'success');
+        navigate(role === 'OWNER' ? '/dashboard' : '/rentals');
       }
-      navigate('/dashboard');
     } catch (err) {
-      setError(err.message);
+      setError(err.message || 'Something went wrong. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -47,35 +84,94 @@ export default function Login() {
         </h1>
         <p className="subtitle">Rental Management System</p>
 
+        {/* Register mode tabs */}
+        {mode === 'register' && (
+          <div style={{
+            display: 'flex', gap: '6px', background: 'var(--surface-variant)',
+            padding: '4px', borderRadius: '8px', marginBottom: '20px',
+          }}>
+            {[
+              { id: REGISTER_MODE.CREATE, icon: 'add_business', label: 'Create Business' },
+              { id: REGISTER_MODE.JOIN, icon: 'group_add', label: 'Join with Code' },
+            ].map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => setRegisterMode(tab.id)}
+                style={{
+                  flex: 1, padding: '8px 4px', border: 'none', borderRadius: '6px',
+                  fontWeight: 600, fontSize: '0.82rem', cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px',
+                  background: registerMode === tab.id ? 'white' : 'transparent',
+                  color: registerMode === tab.id ? 'var(--primary)' : 'var(--on-surface-variant)',
+                  boxShadow: registerMode === tab.id ? '0 1px 3px rgba(0,0,0,0.12)' : 'none',
+                  transition: 'all 0.2s',
+                }}
+              >
+                <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>{tab.icon}</span>
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        )}
+
         <form onSubmit={handleSubmit}>
           <div className="form-group">
             <label>Phone Number</label>
-            <input className="form-input" type="tel" placeholder="Enter your phone number" value={phone} onChange={e => setPhone(e.target.value)} />
+            <input id="phone" className="form-input" type="tel" placeholder="Enter your phone number"
+              value={phone} onChange={e => setPhone(e.target.value)} />
           </div>
 
-          {isRegister && (
+          {mode === 'register' && (
             <div className="form-group">
               <label>Full Name</label>
-              <input className="form-input" type="text" placeholder="Enter your name" value={name} onChange={e => setName(e.target.value)} />
+              <input id="name" className="form-input" type="text" placeholder="Your name"
+                value={name} onChange={e => setName(e.target.value)} />
+            </div>
+          )}
+
+          {mode === 'register' && registerMode === REGISTER_MODE.CREATE && (
+            <div className="form-group">
+              <label>Business / Organization Name</label>
+              <input id="orgName" className="form-input" type="text" placeholder="e.g. Sharma Scaffolding"
+                value={orgName} onChange={e => setOrgName(e.target.value)} />
+            </div>
+          )}
+
+          {mode === 'register' && registerMode === REGISTER_MODE.JOIN && (
+            <div className="form-group">
+              <label>Invite Code</label>
+              <input id="inviteCode" className="form-input" type="text"
+                placeholder="8-character code from your owner"
+                value={inviteCode}
+                onChange={e => setInviteCode(e.target.value.toUpperCase())}
+                style={{ letterSpacing: '3px', fontWeight: 700 }}
+              />
             </div>
           )}
 
           <div className="form-group">
             <label>4-Digit PIN</label>
-            <input className="form-input" type="password" maxLength={4} placeholder="••••" value={pin} onChange={e => setPin(e.target.value.replace(/\D/g, ''))} />
+            <input id="pin" className="form-input" type="password" maxLength={6}
+              placeholder="••••" value={pin}
+              onChange={e => setPin(e.target.value.replace(/\D/g, ''))} />
           </div>
 
           {error && <p className="form-error" style={{ marginBottom: '16px' }}>{error}</p>}
 
           <button className="btn btn-primary btn-lg" style={{ width: '100%' }} disabled={loading} type="submit">
-            {loading ? <><div className="spinner spinner-sm" /> Please wait...</> : isRegister ? 'Create Account' : 'Log In'}
+            {loading
+              ? <><div className="spinner spinner-sm" /> Please wait...</>
+              : mode === 'register'
+                ? (registerMode === REGISTER_MODE.CREATE ? '🏢 Create Organization' : '🔗 Join Organization')
+                : 'Log In'}
           </button>
         </form>
 
         <p style={{ textAlign: 'center', marginTop: '20px', fontSize: '0.9rem', color: 'var(--on-surface-variant)' }}>
-          {isRegister ? 'Already have an account?' : "Don't have an account?"}{' '}
-          <button onClick={() => { setIsRegister(!isRegister); setError(''); }} style={{ background: 'none', border: 'none', color: 'var(--primary)', cursor: 'pointer', fontWeight: 600, fontSize: '0.9rem' }}>
-            {isRegister ? 'Log In' : 'Register'}
+          {mode === 'register' ? 'Already have an account?' : "Don't have an account?"}{' '}
+          <button onClick={() => reset(mode === 'register' ? 'login' : 'register')}
+            style={{ background: 'none', border: 'none', color: 'var(--primary)', cursor: 'pointer', fontWeight: 600, fontSize: '0.9rem' }}>
+            {mode === 'register' ? 'Log In' : 'Register'}
           </button>
         </p>
       </div>

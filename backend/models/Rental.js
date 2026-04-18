@@ -31,6 +31,11 @@ const rentalItemSchema = new mongoose.Schema({
 }, { _id: false });
 
 const rentalSchema = new mongoose.Schema({
+  organizationId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Organization',
+    required: [true, 'Organization is required'],
+  },
   customerId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Customer',
@@ -70,6 +75,12 @@ const rentalSchema = new mongoose.Schema({
     default: 'UNPAID',
   },
 }, { timestamps: true });
+
+// Compound org-scoped indexes
+rentalSchema.index({ organizationId: 1, status: 1, createdAt: -1 });
+rentalSchema.index({ organizationId: 1, customerId: 1 });
+rentalSchema.index({ organizationId: 1, paymentStatus: 1 });
+rentalSchema.index({ organizationId: 1, status: 1, paymentStatus: 1 });
 
 // Virtual: remaining balance
 rentalSchema.virtual('remainingBalance').get(function () {

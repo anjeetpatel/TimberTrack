@@ -1,63 +1,61 @@
 const Payment = require('../models/Payment');
 const Rental = require('../models/Rental');
+const { logActivity } = require('../utils/activityLogger');
 
-// POST /api/payments — with overflow protection
+// POST /api/payments — OWNER only
 exports.recordPayment = async (req, res, next) => {
   try {
-    const { rentalId, amount, paymentMethod } = req.body;
+    const { rentalId, paymentMethod } = req.body;
+    const amount = Number(req.body.amount);
 
-    if (!rentalId || !amount || !paymentMethod) {
-      return res.status(400).json({ success: false, message: 'Rental ID, amount, and payment method are required.' });
-    }
+    if (!rentalId) return res.status(400).json({ success: false, message: 'Rental ID is required.' });
+    if (!paymentMethod) return res.status(400).json({ success: false, message: 'Payment method is required.' });
+    if (isNaN(amount) || amount <= 0) return res.status(400).json({ success: false, message: 'Payment amount must be greater than zero.' });
 
-    if (amount <= 0) {
-      return res.status(400).json({ success: false, message: 'Payment amount must be greater than zero.' });
-    }
+    const rental = await Rental.findOne({ _id: rentalId, organizationId: req.user.organizationId });
+    if (!rental) return res.status(404).json({ success: false, message: 'Rental not found.' });
 
-    const rental = await Rental.findById(rentalId);
-    if (!rental) {
-      return res.status(404).json({ success: false, message: 'Rental not found.' });
-    }
-
-    const dueAmount = rental.totalAmount - rental.amountPaid;
-
-    if (dueAmount <= 0) {
-      return res.status(400).json({ success: false, message: 'No outstanding balance for this rental.' });
-    }
-
+    const dueAmount = Math.max(0, rental.totalAmount - rental.amountPaid);
+    if (dueAmount <= 0) return res.status(400).json({ success: false, message: 'No outstanding balance for this rental.' });
     if (amount > dueAmount) {
       return res.status(400).json({
         success: false,
-        message: `Payment amount (₹${amount}) exceeds the due balance (₹${dueAmount}). Please enter ₹${dueAmount} or less.`,
+        message: `Payment amount (₹${amount}) exceeds the due balance (₹${dueAmount.toFixed(2)}).`,
       });
     }
 
-    // Create payment
     const payment = await Payment.create({
+      organizationId: req.user.organizationId,
       rentalId,
       amount,
       paymentDate: new Date(),
       paymentMethod,
-      createdBy: req.user?.id,
+      createdBy: req.user.id,
     });
 
-    // Update rental
-    rental.amountPaid += amount;
-    if (rental.amountPaid >= rental.totalAmount) {
-      rental.paymentStatus = 'PAID';
-    } else if (rental.amountPaid > 0) {
-      rental.paymentStatus = 'PARTIAL';
-    }
+    rental.amountPaid = parseFloat((rental.amountPaid + amount).toFixed(2));
+    const remaining = parseFloat((rental.totalAmount - rental.amountPaid).toFixed(2));
+    rental.paymentStatus = remaining <= 0 ? 'PAID' : rental.amountPaid > 0 ? 'PARTIAL' : 'UNPAID';
     await rental.save();
+
+    logActivity({
+      organizationId: req.user.organizationId,
+      userId: req.user.id,
+      userName: req.user.name,
+      action: 'PAYMENT_RECORDED',
+      resourceType: 'Payment',
+      resourceId: payment._id,
+      meta: { amount, customerName: rental.customerId?.toString() },
+    });
 
     res.status(201).json({
       success: true,
-      message: 'Payment recorded successfully!',
+      message: 'Payment recorded!',
       data: {
         payment,
         rentalAmountPaid: rental.amountPaid,
         rentalTotalAmount: rental.totalAmount,
-        remainingBalance: Math.max(0, rental.totalAmount - rental.amountPaid),
+        remainingBalance: Math.max(0, remaining),
         paymentStatus: rental.paymentStatus,
       },
     });
@@ -70,10 +68,12 @@ exports.recordPayment = async (req, res, next) => {
 exports.getByRental = async (req, res, next) => {
   try {
     const { rentalId } = req.query;
-    if (!rentalId) {
-      return res.status(400).json({ success: false, message: 'Rental ID is required.' });
-    }
-    const payments = await Payment.find({ rentalId }).sort({ createdAt: -1 });
+    if (!rentalId) return res.status(400).json({ success: false, message: 'Rental ID is required.' });
+
+    const rental = await Rental.findOne({ _id: rentalId, organizationId: req.user.organizationId });
+    if (!rental) return res.status(404).json({ success: false, message: 'Rental not found.' });
+
+    const payments = await Payment.find({ rentalId, organizationId: req.user.organizationId }).sort({ createdAt: -1 });
     res.json({ success: true, data: payments });
   } catch (error) {
     next(error);

@@ -4,11 +4,13 @@ import { rentalAPI, paymentAPI, returnAPI, whatsappAPI } from '../services/api';
 import LoadingSpinner from '../components/LoadingSpinner';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { useToast } from '../components/Toast';
+import { useAuth } from '../context/AuthContext';
 
 export default function RentalDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { addToast } = useToast();
+  const { isOwner } = useAuth();
   const [rental, setRental] = useState(null);
   const [payments, setPayments] = useState([]);
   const [returns, setReturns] = useState([]);
@@ -87,10 +89,16 @@ export default function RentalDetail() {
           </div>
         </div>
         <div style={{ display: 'flex', gap: '8px' }}>
-          <button className="btn btn-whatsapp btn-sm" onClick={() => handleWhatsApp(rental.status === 'COMPLETED' ? 'return' : dueAmount > 0 ? 'reminder' : 'rental')}>
+          <button className="btn btn-whatsapp btn-sm" onClick={() => handleWhatsApp(rental.status === 'COMPLETED' ? 'return' : 'rental')}>
             <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>chat</span>
             WhatsApp
           </button>
+          {isOwner() && dueAmount > 0 && (
+            <button className="btn btn-whatsapp btn-sm" onClick={() => handleWhatsApp('reminder')}>
+              <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>notifications</span>
+              Reminder
+            </button>
+          )}
           {rental.status === 'ACTIVE' && (
             <button className="btn btn-primary btn-sm" onClick={() => navigate(`/rentals/${id}/return`)}>
               <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>assignment_returned</span>
@@ -182,11 +190,17 @@ export default function RentalDetail() {
                 <span className={`badge badge-${rental.paymentStatus?.toLowerCase()}`}>{rental.paymentStatus}</span>
               </div>
 
-              {dueAmount > 0 && (
+              {dueAmount > 0 && isOwner() && (
                 <button className="btn btn-success" style={{ width: '100%', marginTop: '16px' }} onClick={() => setShowPayment(true)}>
                   <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>payments</span>
                   Record Payment
                 </button>
+              )}
+              {dueAmount > 0 && !isOwner() && (
+                <div style={{ marginTop: '16px', padding: '12px', background: 'var(--surface-variant)', borderRadius: '8px', fontSize: '0.85rem', color: 'var(--on-surface-variant)', textAlign: 'center' }}>
+                  <span className="material-symbols-outlined" style={{ verticalAlign: 'middle', fontSize: '16px', marginRight: '4px' }}>info</span>
+                  Payments can only be recorded by the account owner.
+                </div>
               )}
             </div>
 

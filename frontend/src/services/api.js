@@ -17,40 +17,50 @@ const request = async (endpoint, options = {}) => {
 
   // Handle CSV downloads
   if (res.headers.get('Content-Type')?.includes('text/csv')) {
-    const blob = await res.blob();
-    return blob;
+    return res.blob();
   }
 
   const data = await res.json();
   if (!res.ok) {
-    throw new Error(data.message || 'Something went wrong');
+    // Build a rich error object so callers can read status code too
+    const err = new Error(data.message || 'Something went wrong');
+    err.status = res.status;
+    err.data = data;
+    throw err;
   }
   return data;
 };
 
-// ---- AUTH ----
+// ── AUTH ──────────────────────────────────────────────────────────
 export const authAPI = {
   register: (body) => request('/auth/register', { method: 'POST', body: JSON.stringify(body) }),
   login: (body) => request('/auth/login', { method: 'POST', body: JSON.stringify(body) }),
+  refresh: () => request('/auth/refresh', { method: 'POST' }),
+  getMe: () => request('/auth/me'),
 };
 
-// ---- INVENTORY ----
+// ── INVENTORY ─────────────────────────────────────────────────────
 export const inventoryAPI = {
-  getAll: (search = '') => request(`/inventory${search ? `?search=${encodeURIComponent(search)}` : ''}`),
+  getAll: (params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return request(`/inventory${qs ? `?${qs}` : ''}`);
+  },
   create: (body) => request('/inventory', { method: 'POST', body: JSON.stringify(body) }),
   update: (id, body) => request(`/inventory/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+  delete: (id) => request(`/inventory/${id}`, { method: 'DELETE' }),
 };
 
-// ---- CUSTOMERS ----
+// ── CUSTOMERS ─────────────────────────────────────────────────────
 export const customerAPI = {
   getAll: (params = {}) => {
     const qs = new URLSearchParams(params).toString();
     return request(`/customers${qs ? `?${qs}` : ''}`);
   },
   create: (body) => request('/customers', { method: 'POST', body: JSON.stringify(body) }),
+  delete: (id) => request(`/customers/${id}`, { method: 'DELETE' }),
 };
 
-// ---- RENTALS ----
+// ── RENTALS ───────────────────────────────────────────────────────
 export const rentalAPI = {
   getAll: (params = {}) => {
     const qs = new URLSearchParams(params).toString();
@@ -60,36 +70,67 @@ export const rentalAPI = {
   create: (body) => request('/rentals', { method: 'POST', body: JSON.stringify(body) }),
 };
 
-// ---- RETURNS ----
+// ── RETURNS ───────────────────────────────────────────────────────
 export const returnAPI = {
   process: (body) => request('/returns', { method: 'POST', body: JSON.stringify(body) }),
   getByRental: (rentalId) => request(`/returns?rentalId=${rentalId}`),
 };
 
-// ---- PAYMENTS ----
+// ── PAYMENTS ──────────────────────────────────────────────────────
 export const paymentAPI = {
   record: (body) => request('/payments', { method: 'POST', body: JSON.stringify(body) }),
   getByRental: (rentalId) => request(`/payments?rentalId=${rentalId}`),
 };
 
-// ---- DASHBOARD ----
+// ── DASHBOARD ─────────────────────────────────────────────────────
 export const dashboardAPI = {
   getStats: () => request('/dashboard/stats'),
 };
 
-// ---- WHATSAPP ----
+// ── WHATSAPP ──────────────────────────────────────────────────────
 export const whatsappAPI = {
   rentalMessage: (rentalId) => request(`/whatsapp/rental/${rentalId}`),
   returnMessage: (rentalId) => request(`/whatsapp/return/${rentalId}`),
   reminderMessage: (rentalId) => request(`/whatsapp/reminder/${rentalId}`),
 };
 
-// ---- EXPORT ----
+// ── EXPORT ────────────────────────────────────────────────────────
 export const exportAPI = {
-  downloadRentals: () => request('/export/rentals'),
-  downloadPayments: () => request('/export/payments'),
+  downloadRentals: (params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return request(`/export/rentals${qs ? `?${qs}` : ''}`);
+  },
+  downloadPayments: (params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return request(`/export/payments${qs ? `?${qs}` : ''}`);
+  },
 };
 
+// ── ORGANIZATION ──────────────────────────────────────────────────
+export const orgAPI = {
+  get: () => request('/organization'),
+  transferOwnership: (targetUserId) =>
+    request('/organization/transfer', { method: 'POST', body: JSON.stringify({ targetUserId }) }),
+  regenerateInviteCode: (opts = {}) =>
+    request('/organization/invite/regenerate', { method: 'POST', body: JSON.stringify(opts) }),
+};
+
+// ── SUBSCRIPTION ──────────────────────────────────────────────────
+export const subscriptionAPI = {
+  get: () => request('/subscription'),
+  upgrade: () => request('/subscription/upgrade', { method: 'POST' }),
+  downgrade: () => request('/subscription/downgrade', { method: 'POST' }),
+};
+
+// ── ACTIVITY LOG ──────────────────────────────────────────────────
+export const activityAPI = {
+  getLogs: (params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return request(`/activity${qs ? `?${qs}` : ''}`);
+  },
+};
+
+// ── UTILS ─────────────────────────────────────────────────────────
 export const downloadBlob = (blob, filename) => {
   const url = window.URL.createObjectURL(blob);
   const a = document.createElement('a');

@@ -1,6 +1,11 @@
 const mongoose = require('mongoose');
 
 const paymentSchema = new mongoose.Schema({
+  organizationId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Organization',
+    required: [true, 'Organization is required'],
+  },
   rentalId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Rental',
@@ -26,5 +31,9 @@ const paymentSchema = new mongoose.Schema({
     ref: 'User',
   },
 }, { timestamps: true });
+
+// Compound org-scoped indexes
+paymentSchema.index({ organizationId: 1, rentalId: 1, createdAt: -1 });
+paymentSchema.index({ organizationId: 1, createdAt: -1 });
 
 module.exports = mongoose.model('Payment', paymentSchema);

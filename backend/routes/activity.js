@@ -1,10 +1,9 @@
 const express = require('express');
 const router = express.Router();
-const { recordPayment, getByRental } = require('../controllers/paymentController');
+const { getLogs } = require('../controllers/activityController');
 const auth = require('../middleware/auth');
 const requireRole = require('../middleware/requireRole');
 
-router.get('/', auth, getByRental);
-router.post('/', auth, requireRole('OWNER'), recordPayment);
+router.get('/', auth, requireRole('OWNER'), getLogs);
 
 module.exports = router;
