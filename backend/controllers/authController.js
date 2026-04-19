@@ -1,4 +1,5 @@
 const jwt = require('jsonwebtoken');
+const mongoose = require('mongoose');
 const User = require('../models/User');
 const Organization = require('../models/Organization');
 
@@ -26,12 +27,14 @@ exports.register = async (req, res, next) => {
 
     let org;
     let role;
+    let newUserId;
 
     if (organizationName) {
+      newUserId = new mongoose.Types.ObjectId();
       // ── Create new organization as OWNER ──────────────────────
       org = await Organization.create({
         name: organizationName.trim(),
-        ownerId: null, // will be set after user creation
+        ownerId: newUserId, // will be set after user creation
         usageStats: { lastResetDate: new Date() },
       });
       role = 'OWNER';
@@ -58,13 +61,17 @@ exports.register = async (req, res, next) => {
       return res.status(400).json({ success: false, message: 'A user with this phone number already exists in this organization.' });
     }
 
-    const user = await User.create({
+    const userData = {
       name: name.trim(),
       phone: phone.trim(),
       pin,
       organizationId: org._id,
       role,
-    });
+    };
+    if (newUserId) {
+      userData._id = newUserId;
+    }
+    const user = await User.create(userData);
 
     // For new org: set ownerId now that user exists
     if (organizationName) {

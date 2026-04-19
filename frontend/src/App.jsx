@@ -7,6 +7,7 @@ import LoadingSpinner from './components/LoadingSpinner';
 import { dashboardAPI } from './services/api';
 
 // Lazy-loaded pages
+const Landing = lazy(() => import('./pages/Landing'));
 const Login = lazy(() => import('./pages/Login'));
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const Inventory = lazy(() => import('./pages/Inventory'));
@@ -80,6 +81,7 @@ export default function App() {
         <ToastProvider>
           <Suspense fallback={<LoadingSpinner size="page" />}>
             <Routes>
+              <Route path="/" element={<Landing />} />
               <Route path="/login" element={<Login />} />
               <Route path="/*" element={
                 <ProtectedRoute>
