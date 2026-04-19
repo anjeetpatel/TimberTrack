@@ -31,3 +31,5 @@ ui_analysis.json
 
 # UI screens (raw HTML from Stitch — not needed in repo)
 ui_screens/
+
+implementation_plan.md
